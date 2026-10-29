@@ -122,24 +122,37 @@ pub fn connections() -> anyhow::Result<String> {
         GetExtendedTcpTable(std::ptr::null_mut(), &mut size, 0, AF_INET, TCP_TABLE_OWNER_PID_ALL, 0)
     };
     if first != ERROR_INSUFFICIENT_BUFFER && first != 0 {
-        anyhow::bail!("GetExtendedTcpTable failed with Windows error {first}");
+        anyhow::bail!("GetExtendedTcpTable size query failed with Windows error {first}");
     }
-    let mut buffer = vec![0u64; ((size as usize + 7) / 8).max(1)];
-    let result = unsafe {
-        GetExtendedTcpTable(buffer.as_mut_ptr().cast(), &mut size, 0, AF_INET, TCP_TABLE_OWNER_PID_ALL, 0)
-    };
+
+    // The connection table can grow between the size query and the read.
+    // Retry with the updated size instead of failing on a normal race.
+    let mut buffer: Vec<u64> = Vec::new();
+    let mut result = 0u32;
+    for _ in 0..4 {
+        buffer = vec![0u64; ((size as usize + 7) / 8).max(1)];
+        result = unsafe {
+            GetExtendedTcpTable(buffer.as_mut_ptr().cast(), &mut size, 0, AF_INET, TCP_TABLE_OWNER_PID_ALL, 0)
+        };
+        if result == 0 {
+            break;
+        }
+        if result != ERROR_INSUFFICIENT_BUFFER {
+            anyhow::bail!("GetExtendedTcpTable failed with Windows error {result}");
+        }
+    }
     if result != 0 {
-        anyhow::bail!("GetExtendedTcpTable failed with Windows error {result}");
+        anyhow::bail!("TCP connection table kept changing; please refresh again (Windows error {result})");
     }
 
     let table = buffer.as_ptr().cast::<TcpTableOwnerPid>();
-    let count = unsafe { (*table).count as usize }.min(300);
+    let count = unsafe { (*table).count as usize };
     let rows = unsafe { std::slice::from_raw_parts((*table).rows.as_ptr(), count) };
     let mut output = String::from("Proto  Local Address          Remote Address         State        PID\n");
     output.push_str("-----  ---------------------  ---------------------  -----------  -----\n");
     for row in rows {
-        let local_ip = Ipv4Addr::from(u32::from_le(row.local_addr));
-        let remote_ip = Ipv4Addr::from(u32::from_le(row.remote_addr));
+        let local_ip = Ipv4Addr::from(u32::from_be(row.local_addr));
+        let remote_ip = Ipv4Addr::from(u32::from_be(row.remote_addr));
         let local_port = u16::from_be(row.local_port as u16);
         let remote_port = u16::from_be(row.remote_port as u16);
         let state = match row.state {
