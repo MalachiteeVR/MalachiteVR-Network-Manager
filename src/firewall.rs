@@ -30,24 +30,15 @@ fn value_string(value: &serde_json::Value) -> String {
 }
 
 pub fn rules() -> anyhow::Result<Vec<Rule>> {
+    // Do not pass projected PSCustomObjects to -AssociatedNetFirewallRule.
+    // Some Windows/PowerShell versions reject that conversion. Enumerate the
+    // rule metadata directly so the firewall page remains usable on all hosts.
     let script = r#"Get-NetFirewallRule |
-        Select-Object -First 1000 |
-        ForEach-Object {
-            $p = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $_ -ErrorAction SilentlyContinue |
-                 Select-Object -First 1 Protocol,LocalPort
-            [PSCustomObject]@{
-                DisplayName=$_.DisplayName
-                Direction=$_.Direction
-                Action=$_.Action
-                Enabled=$_.Enabled
-                Profile=$_.Profile
-                Protocol=if($p){$p.Protocol}else{''}
-                LocalPort=if($p){$p.LocalPort}else{''}
-            }
-        } | ConvertTo-Json -Compress"#;
+        Select-Object -First 1000 DisplayName,Direction,Action,Enabled,Profile |
+        ConvertTo-Json -Compress"#;
 
     let output = ps(script)?;
-    if output.is_empty() {
+    if output.trim().is_empty() {
         return Ok(Vec::new());
     }
 
@@ -66,8 +57,11 @@ pub fn rules() -> anyhow::Result<Vec<Rule>> {
             action: value_string(&item["Action"]),
             enabled: value_string(&item["Enabled"]),
             profile: value_string(&item["Profile"]),
-            protocol: value_string(&item["Protocol"]),
-            local_port: value_string(&item["LocalPort"]),
+            // Protocol and local-port details are omitted for now because
+            // retrieving them through -AssociatedNetFirewallRule is not
+            // reliable across Windows PowerShell object representations.
+            protocol: String::new(),
+            local_port: String::new(),
         })
         .collect())
 }
