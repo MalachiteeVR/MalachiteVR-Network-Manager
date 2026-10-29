@@ -71,16 +71,22 @@ pub fn discover() -> Result<Vec<Device>> {
     Ok(devices)
 }
 
-fn service_control_url(description_url: &str) -> Result<String> {
+fn service_control_url(description_url: &str) -> Result<(String, &'static str)> {
     let client = Client::builder().timeout(Duration::from_secs(5)).build()?;
     let xml = client.get(description_url).send()?.error_for_status()?.text()?;
     let lower = xml.to_ascii_lowercase();
 
-    for service_type in [
-        "urn:schemas-upnp-org:service:wanipconnection:1",
-        "urn:schemas-upnp-org:service:wanpppconnection:1",
+    for (service_type, needle) in [
+        (
+            "urn:schemas-upnp-org:service:WANIPConnection:1",
+            "urn:schemas-upnp-org:service:wanipconnection:1",
+        ),
+        (
+            "urn:schemas-upnp-org:service:WANPPPConnection:1",
+            "urn:schemas-upnp-org:service:wanpppconnection:1",
+        ),
     ] {
-        if let Some(type_pos) = lower.find(service_type) {
+        if let Some(type_pos) = lower.find(needle) {
             let service_start = lower[..type_pos].rfind("<service>").unwrap_or(0);
             let service_end = lower[type_pos..]
                 .find("</service>")
@@ -89,7 +95,10 @@ fn service_control_url(description_url: &str) -> Result<String> {
             let section = &xml[service_start..service_end];
 
             if let Some(control) = tag_value(section, "controlURL") {
-                return Ok(reqwest::Url::parse(description_url)?.join(control)?.to_string());
+                return Ok((
+                    reqwest::Url::parse(description_url)?.join(control)?.to_string(),
+                    service_type,
+                ));
             }
         }
     }
@@ -114,13 +123,7 @@ pub fn add(
         .parse()
         .context("Internal client must be a valid IPv4 address")?;
 
-    let control = service_control_url(&device.location)?;
-    let service_type = if control.contains("wanppp") {
-        "urn:schemas-upnp-org:service:WANPPPConnection:1"
-    } else {
-        "urn:schemas-upnp-org:service:WANIPConnection:1"
-    };
-
+    let (control, service_type) = service_control_url(&device.location)?;
     let xml = format!(
         r#"<?xml version="1.0"?>
 <s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
@@ -157,9 +160,8 @@ pub fn add(
         anyhow::bail!("UPnP router error ({}): {}", status, detail);
     }
 
-    if body.to_ascii_lowercase().contains("<s:fault")
-        || body.to_ascii_lowercase().contains(":fault>")
-    {
+    let lower = body.to_ascii_lowercase();
+    if lower.contains("<s:fault") || lower.contains(":fault>") {
         let detail = tag_value(&body, "errorDescription").unwrap_or("SOAP fault returned by router");
         anyhow::bail!("UPnP SOAP fault: {}", detail);
     }
