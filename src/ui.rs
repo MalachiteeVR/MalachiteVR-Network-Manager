@@ -38,10 +38,23 @@ fn run_command(message: &str, proxy: &EventLoopProxy<UserEvent>) {
         let result: anyhow::Result<Value> = (|| -> anyhow::Result<Value> {
             match action.as_str() {
                 "refresh" => {
-                    let adapters = network::adapters()?;
-                    let rules = firewall::rules()?;
-                    let ip = network::private_ipv4()?.map(|x| x.to_string());
-                    Ok(json!({"kind":"refresh","adapters":adapters,"rules":rules,"ip":ip}))
+                    // Keep subsystems independent: a firewall API failure must not
+                    // prevent adapters or the LAN address from appearing.
+                    let (adapters, adapter_error) = match network::adapters() {
+                        Ok(value) => (value, None),
+                        Err(error) => (Vec::<network::Adapter>::new(), Some(format!("Adapters: {error}"))),
+                    };
+                    let (rules, firewall_error) = match firewall::rules() {
+                        Ok(value) => (value, None),
+                        Err(error) => (Vec::<firewall::Rule>::new(), Some(format!("Firewall: {error}"))),
+                    };
+                    let (ip, ip_error) = match network::private_ipv4() {
+                        Ok(value) => (value.map(|x| x.to_string()), None),
+                        Err(error) => (None, Some(format!("LAN address: {error}"))),
+                    };
+                    let warnings: Vec<String> = [adapter_error, firewall_error, ip_error]
+                        .into_iter().flatten().collect();
+                    Ok(json!({"kind":"refresh","adapters":adapters,"rules":rules,"ip":ip,"warnings":warnings}))
                 }
                 "connections" => Ok(json!({
                     "kind": "connections",
