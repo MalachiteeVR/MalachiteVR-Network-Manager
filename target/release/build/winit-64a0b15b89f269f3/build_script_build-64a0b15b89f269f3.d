@@ -1,5 +1,0 @@
-C:\Users\mal\Documents\Windows APPS\malachite-network-manager-rust\target\release\build\winit-64a0b15b89f269f3\build_script_build-64a0b15b89f269f3.d: C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\winit-0.30.13\build.rs
-
-C:\Users\mal\Documents\Windows APPS\malachite-network-manager-rust\target\release\build\winit-64a0b15b89f269f3\build_script_build-64a0b15b89f269f3.exe: C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\winit-0.30.13\build.rs
-
-C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\winit-0.30.13\build.rs:
