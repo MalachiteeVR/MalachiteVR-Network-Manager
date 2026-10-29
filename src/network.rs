@@ -17,7 +17,7 @@ pub struct Adapter {
 }
 
 fn ps_quote(value: &str) -> String {
-    value.replace(''', "''")
+    value.replace('\'', "''")
 }
 
 pub fn adapters() -> anyhow::Result<Vec<Adapter>> {
