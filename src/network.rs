@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{net::{IpAddr, Ipv4Addr}, process::Command};
+use std::net::Ipv4Addr;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Adapter {
@@ -33,7 +33,7 @@ pub fn adapters() -> anyhow::Result<Vec<Adapter>> {
     Ok(interfaces.into_iter().map(|interface| Adapter {
         name: interface.friendly_name.clone().unwrap_or_else(|| interface.name.clone()),
         description: interface.description.clone().unwrap_or_else(|| interface.friendly_name.clone().unwrap_or_else(|| interface.name.clone())),
-        status: if interface.is_oper_up() { "Up" } else { "Down" }.to_string(),
+        status: if interface.is_up() { "Up" } else { "Down" }.to_string(),
         speed: format_speed(interface.transmit_speed.or(interface.receive_speed)),
         mac: interface.mac_addr.map(|address| address.to_string()),
     }).collect())
@@ -121,7 +121,7 @@ pub fn connections() -> anyhow::Result<String> {
     if first != ERROR_INSUFFICIENT_BUFFER && first != 0 {
         anyhow::bail!("GetExtendedTcpTable failed with Windows error {first}");
     }
-    let mut buffer = vec![0u64; (size as usize + 7) / 8];
+    let mut buffer = vec![0u64; ((size as usize + 7) / 8).max(1)];
     let result = unsafe {
         GetExtendedTcpTable(buffer.as_mut_ptr().cast(), &mut size, 0, AF_INET, TCP_TABLE_OWNER_PID_ALL, 0)
     };
