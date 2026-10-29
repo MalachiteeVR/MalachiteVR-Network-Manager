@@ -12,12 +12,25 @@ pub struct Rule {
 }
 
 fn quote(value: &str) -> String {
-    value.replace(''', "''")
+    value.replace('\'', "''")
+}
+
+fn value_string(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(items) => items
+            .iter()
+            .map(value_string)
+            .collect::<Vec<_>>()
+            .join(", "),
+        serde_json::Value::Null => String::new(),
+        other => other.to_string(),
+    }
 }
 
 pub fn rules() -> anyhow::Result<Vec<Rule>> {
     let script = r#"Get-NetFirewallRule |
-        Select-Object -First 1000 DisplayName,Direction,Action,Enabled,Profile,PrimaryStatus |
+        Select-Object -First 1000 DisplayName,Direction,Action,Enabled,Profile |
         ForEach-Object {
             $p = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $_ -ErrorAction SilentlyContinue |
                  Select-Object -First 1 Protocol,LocalPort
@@ -32,12 +45,12 @@ pub fn rules() -> anyhow::Result<Vec<Rule>> {
             }
         } | ConvertTo-Json -Compress"#;
 
-    let s = ps(script)?;
-    if s.is_empty() {
+    let output = ps(script)?;
+    if output.is_empty() {
         return Ok(Vec::new());
     }
 
-    let value: serde_json::Value = serde_json::from_str(&s)?;
+    let value: serde_json::Value = serde_json::from_str(&output)?;
     let items = if value.is_array() {
         value.as_array().cloned().unwrap_or_default()
     } else {
@@ -46,16 +59,14 @@ pub fn rules() -> anyhow::Result<Vec<Rule>> {
 
     Ok(items
         .into_iter()
-        .map(|x| Rule {
-            name: x["DisplayName"].as_str().unwrap_or_default().to_string(),
-            direction: x["Direction"].as_str().unwrap_or_default().to_string(),
-            action: x["Action"].as_str().unwrap_or_default().to_string(),
-            enabled: x["Enabled"].as_str().unwrap_or_default().to_string(),
-            profile: x["Profile"].as_str().unwrap_or_default().to_string(),
-            protocol: x["Protocol"].as_str().unwrap_or_default().to_string(),
-            local_port: x["LocalPort"].as_str().unwrap_or_else(|| {
-                if x["LocalPort"].is_number() { "" } else { "" }
-            }).to_string(),
+        .map(|item| Rule {
+            name: value_string(&item["DisplayName"]),
+            direction: value_string(&item["Direction"]),
+            action: value_string(&item["Action"]),
+            enabled: value_string(&item["Enabled"]),
+            profile: value_string(&item["Profile"]),
+            protocol: value_string(&item["Protocol"]),
+            local_port: value_string(&item["LocalPort"]),
         })
         .collect())
 }
