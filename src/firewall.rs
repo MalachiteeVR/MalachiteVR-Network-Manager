@@ -1,6 +1,7 @@
 use crate::admin::ps;
+use serde::Serialize;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Rule {
     pub name: String,
     pub direction: String,
