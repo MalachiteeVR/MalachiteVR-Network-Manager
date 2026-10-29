@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::{
     collections::HashMap,
     net::{Ipv4Addr, SocketAddr, UdpSocket},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[derive(Clone, Debug, Serialize)]
@@ -40,20 +40,41 @@ fn tag_value<'a>(xml: &'a str, tag: &str) -> Option<&'a str> {
 }
 
 pub fn discover() -> Result<Vec<Device>> {
-    let socket = UdpSocket::bind("0.0.0.0:0")?;
-    socket.set_read_timeout(Some(Duration::from_millis(900)))?;
+    let socket = UdpSocket::bind("0.0.0.0:0")
+        .context("Could not open a UDP socket for UPnP discovery")?;
+    socket.set_broadcast(true)?;
+    socket.set_read_timeout(Some(Duration::from_millis(250)))?;
 
-    let query = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 1\r\nST: urn:schemas-upnp-org:device:InternetGatewayDevice:1\r\n\r\n";
-    socket.send_to(
-        query.as_bytes(),
-        SocketAddr::new(Ipv4Addr::new(239, 255, 255, 250).into(), 1900),
-    )?;
+    let destination = SocketAddr::new(Ipv4Addr::new(239, 255, 255, 250).into(), 1900);
+    // Routers vary in which SSDP target they advertise. Query common IGD and
+    // WAN connection service versions, plus ssdp:all for non-standard devices.
+    let targets = [
+        "urn:schemas-upnp-org:device:InternetGatewayDevice:1",
+        "urn:schemas-upnp-org:device:InternetGatewayDevice:2",
+        "urn:schemas-upnp-org:service:WANIPConnection:1",
+        "urn:schemas-upnp-org:service:WANIPConnection:2",
+        "urn:schemas-upnp-org:service:WANPPPConnection:1",
+        "urn:schemas-upnp-org:service:WANPPPConnection:2",
+        "ssdp:all",
+    ];
+    for target in targets {
+        let query = format!(
+            "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: {target}\r\n\r\n"
+        );
+        socket.send_to(query.as_bytes(), destination)?;
+    }
 
     let mut devices = Vec::new();
     let mut buffer = [0u8; 8192];
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut last_response = Instant::now();
     loop {
+        if Instant::now() >= deadline {
+            break;
+        }
         match socket.recv_from(&mut buffer) {
             Ok((size, _)) => {
+                last_response = Instant::now();
                 let response = String::from_utf8_lossy(&buffer[..size]);
                 let h = headers(&response);
                 if let Some(location) = h.get("location") {
@@ -65,7 +86,14 @@ pub fn discover() -> Result<Vec<Device>> {
                     }
                 }
             }
-            Err(_) => break,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock
+                || error.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                if !devices.is_empty() && last_response.elapsed() >= Duration::from_millis(750) {
+                    break;
+                }
+            }
+            Err(error) => return Err(error).context("Failed while receiving UPnP discovery replies"),
         }
     }
 
