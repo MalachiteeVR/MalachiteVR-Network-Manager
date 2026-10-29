@@ -1,4 +1,5 @@
 use crate::{firewall, network, upnp};
+use anyhow::Context;
 use serde_json::{json, Value};
 use std::net::Ipv4Addr;
 use std::thread;
@@ -61,87 +62,176 @@ impl App {
 fn run_command(message: &str, proxy: &EventLoopProxy<UserEvent>) {
     let parsed: Value = match serde_json::from_str(message) {
         Ok(v) => v,
-        Err(e) => { let _ = proxy.send_event(UserEvent::Result(json!({"error": format!("Invalid command: {e}")}).to_string())); return; }
+        Err(e) => {
+            let _ = proxy.send_event(UserEvent::Result(
+                json!({"error": format!("Invalid command: {e}")}).to_string(),
+            ));
+            return;
+        }
     };
-    let action = parsed.get("action").and_then(Value::as_str).unwrap_or("").to_string();
+
+    let action = parsed
+        .get("action")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+
     let proxy = proxy.clone();
+
     thread::spawn(move || {
-        let result = match action.as_str() {
+        let result: anyhow::Result<Value> = match action.as_str() {
             "refresh" => {
                 let adapters = network::adapters()?;
                 let rules = firewall::rules()?;
                 let ip = network::private_ipv4()?.map(|x| x.to_string());
-                Ok(json!({"kind":"refresh","adapters":adapters.iter().map(|a| json!({"name":a.name,"description":a.description,"status":a.status,"speed":a.speed,"mac":a.mac})).collect::<Vec<_>>(),"rules":rules.iter().map(|r| json!({"name":r.name,"direction":r.direction,"action":r.action,"enabled":r.enabled,"profile":r.profile,"protocol":r.protocol,"local_port":r.local_port})).collect::<Vec<_>>(),"ip":ip}))
+
+                Ok(json!({
+                    "kind": "refresh",
+                    "adapters": adapters.iter().map(|x| json!({
+                        "name": x.name,
+                        "description": x.description,
+                        "status": x.status,
+                        "speed": x.speed,
+                        "mac": x.mac,
+                    })).collect::<Vec<_>>(),
+                    "rules": rules.iter().map(|x| json!({
+                        "name": x.name,
+                        "direction": x.direction,
+                        "action": x.action,
+                        "enabled": x.enabled,
+                        "profile": x.profile,
+                        "protocol": x.protocol,
+                        "local_port": x.local_port,
+                    })).collect::<Vec<_>>(),
+                    "ip": ip,
+                }))
             }
-            "connections" => Ok(json!({"kind":"connections","text":network::connections()?})),
+
+            "connections" => Ok(json!({
+                "kind": "connections",
+                "text": network::connections()?
+            })),
+
             "discover" => {
                 let devices = upnp::discover()?;
-                Ok(json!({"kind":"discover","devices":devices.iter().map(|d| json!({"location":d.location,"server":d.server})).collect::<Vec<_>>()}))
+                Ok(json!({
+                    "kind": "discover",
+                    "devices": devices.iter().map(|x| json!({
+                        "location": x.location,
+                        "server": x.server,
+                    })).collect::<Vec<_>>()
+                }))
             }
+
             "toggle" => {
-                let name = parsed.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+                let name = parsed.get("name").and_then(Value::as_str).unwrap_or("");
                 let enable = parsed.get("enable").and_then(Value::as_bool).unwrap_or(false);
-                network::toggle(&name, enable)?;
-                Ok(json!({"message":format!("Adapter '{}' updated", name)}))
+                network::toggle(name, enable)?;
+                Ok(json!({
+                    "kind": "message",
+                    "message": if enable { format!("Enabled {name}") } else { format!("Disabled {name}") }
+                }))
             }
+
             "firewall_add" => {
-                let name=parsed.get("name").and_then(Value::as_str).unwrap_or("");
-                let port=parsed.get("port").and_then(Value::as_u64).unwrap_or(0) as u16;
-                let proto=parsed.get("protocol").and_then(Value::as_str).unwrap_or("TCP");
-                if name.trim().is_empty() || port==0 { anyhow::bail!("Rule name and a valid port are required"); }
-                firewall::add(name.trim(),port,proto)?;
-                Ok(json!({"message":"Firewall rule created"}))
+                let name = parsed.get("name").and_then(Value::as_str).unwrap_or("").trim();
+                let port = parsed.get("port").and_then(Value::as_u64).unwrap_or(0);
+                let protocol = parsed.get("protocol").and_then(Value::as_str).unwrap_or("TCP");
+                if name.is_empty() || !(1..=65535).contains(&port) {
+                    anyhow::bail!("Rule name and a valid port are required");
+                }
+                firewall::add(name, u16::try_from(port)?, protocol)?;
+                Ok(json!({
+                    "kind": "message",
+                    "message": format!("Firewall rule created for {protocol} port {port}")
+                }))
             }
-            "firewall_remove" => { let name=parsed.get("name").and_then(Value::as_str).unwrap_or(""); firewall::remove(name)?; Ok(json!({"message":"Firewall rule removed"})) }
+
+            "firewall_remove" => {
+                let name = parsed.get("name").and_then(Value::as_str).unwrap_or("").trim();
+                if name.is_empty() { anyhow::bail!("Firewall rule name is required"); }
+                firewall::remove(name)?;
+                Ok(json!({
+                    "kind": "message",
+                    "message": format!("Removed firewall rule: {name}")
+                }))
+            }
+
             "upnp_add" => {
-                let index=parsed.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
-                let devices=upnp::discover()?;
-                if index>=devices.len(){ anyhow::bail!("Selected UPnP gateway is no longer available"); }
-                let external=parsed.get("external").and_then(Value::as_u64).unwrap_or(0) as u16;
-                let internal=parsed.get("internal").and_then(Value::as_u64).unwrap_or(0) as u16;
-                let protocol=parsed.get("protocol").and_then(Value::as_str).unwrap_or("TCP");
-                let client=parsed.get("client").and_then(Value::as_str).unwrap_or("");
-                let description=parsed.get("description").and_then(Value::as_str).unwrap_or("");
-                let ip: Ipv4Addr=client.parse().map_err(|_| anyhow::anyhow!("Private IP must be a valid IPv4 address"))?;
-                if !ip.is_private(){ anyhow::bail!("Private IP must be an RFC1918 address"); }
-                if external==0 || internal==0 { anyhow::bail!("Ports must be 1-65535"); }
-                upnp::add(&devices[index],external,internal,protocol,&ip.to_string(),description)?;
-                Ok(json!({"message":format!("{} port mapping created",protocol)}))
+                let index = parsed.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
+                let external = parsed.get("external").and_then(Value::as_u64).unwrap_or(0);
+                let internal = parsed.get("internal").and_then(Value::as_u64).unwrap_or(0);
+                let protocol = parsed.get("protocol").and_then(Value::as_str).unwrap_or("TCP");
+                let client = parsed.get("client").and_then(Value::as_str).unwrap_or("");
+                let description = parsed.get("description").and_then(Value::as_str).unwrap_or("MalachiteVR Network Manager");
+
+                if !(1..=65535).contains(&external) || !(1..=65535).contains(&internal) {
+                    anyhow::bail!("Ports must be between 1 and 65535");
+                }
+
+                let client_ip: Ipv4Addr = client.parse().context("Private IPv4 address is invalid")?;
+                if !client_ip.is_private() {
+                    anyhow::bail!("Port mappings require an RFC1918 private IPv4 address");
+                }
+
+                let devices = upnp::discover()?;
+                let device = devices.get(index).ok_or_else(|| anyhow::anyhow!("Selected UPnP gateway no longer exists"))?;
+
+                upnp::add(device, external as u16, internal as u16, protocol, &client_ip.to_string(), description)?;
+
+                Ok(json!({
+                    "kind": "message",
+                    "message": format!("Added {protocol} port mapping {external} → {client_ip}:{internal}")
+                }))
             }
+
             _ => anyhow::bail!("Unknown command: {action}"),
         };
-        let payload = match result { Ok(v)=>v.to_string(), Err(e)=>json!({"error":e.to_string()}).to_string() };
-        let _=proxy.send_event(UserEvent::Result(payload));
+
+        let payload = match result {
+            Ok(value) => value.to_string(),
+            Err(error) => json!({"error": error.to_string()}).to_string(),
+        };
+
+        let _ = proxy.send_event(UserEvent::Result(payload));
     });
 }
 
 impl ApplicationHandler<UserEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() { return; }
-        let attrs = Window::default_attributes()
-            .with_title("MalachiteVR Network Manager")
-            .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 820.0))
-            .with_min_inner_size(winit::dpi::LogicalSize::new(980.0, 640.0));
-        let window = event_loop.create_window(attrs).expect("Failed to create window");
+
+        let window = event_loop
+            .create_window(
+                Window::default_attributes()
+                    .with_title("MalachiteVR Network Manager")
+                    .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 820.0)),
+            )
+            .expect("Failed to create application window");
+
         let proxy = self.proxy.clone();
         let webview = WebViewBuilder::new()
             .with_html(HTML)
             .with_ipc_handler(move |request| run_command(request.body(), &proxy))
             .build(&window)
             .expect("Failed to initialize Microsoft Edge WebView2");
-        self.window=Some(window);
-        self.webview=Some(webview);
+
+        self.window = Some(window);
+        self.webview = Some(webview);
     }
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
-        if let (Some(webview), UserEvent::Result(payload)) = (&self.webview, event) {
+        let UserEvent::Result(payload) = event;
+        if let Some(webview) = &self.webview {
             let script = format!("window.__nm_result({});", payload);
             let _ = webview.evaluate_script(&script);
         }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
-        if matches!(event, WindowEvent::CloseRequested) { event_loop.exit(); }
+        if let WindowEvent::CloseRequested = event {
+            event_loop.exit();
+        }
     }
 }
 
