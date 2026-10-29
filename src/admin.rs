@@ -1,5 +1,3 @@
-use std::process::Command;
-
 #[cfg(windows)]
 pub fn is_admin() -> bool {
     unsafe {
@@ -65,27 +63,3 @@ pub fn ensure_elevated() {
     }
 }
 
-pub fn ps(script: &str) -> anyhow::Result<String> {
-    let mut command = Command::new("powershell.exe");
-    command.args([
-        "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script,
-    ]);
-
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
-
-    let output = command.output()?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        anyhow::bail!(
-            "PowerShell command failed (exit {}): {}",
-            output.status,
-            if stderr.is_empty() { "unknown error" } else { &stderr }
-        );
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
