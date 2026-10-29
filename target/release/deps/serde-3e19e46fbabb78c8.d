@@ -1,0 +1,14 @@
+C:\Users\mal\Documents\Windows APPS\malachite-network-manager-rust\target\release\deps\serde-3e19e46fbabb78c8.d: C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\mal\Documents\Windows\ APPS\malachite-network-manager-rust\target\release\build\serde-837104cacb4971cf\out/private.rs
+
+C:\Users\mal\Documents\Windows APPS\malachite-network-manager-rust\target\release\deps\libserde-3e19e46fbabb78c8.rlib: C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\mal\Documents\Windows\ APPS\malachite-network-manager-rust\target\release\build\serde-837104cacb4971cf\out/private.rs
+
+C:\Users\mal\Documents\Windows APPS\malachite-network-manager-rust\target\release\deps\libserde-3e19e46fbabb78c8.rmeta: C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\mal\Documents\Windows\ APPS\malachite-network-manager-rust\target\release\build\serde-837104cacb4971cf\out/private.rs
+
+C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs:
+C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs:
+C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs:
+C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs:
+C:\Users\mal\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs:
+C:\Users\mal\Documents\Windows\ APPS\malachite-network-manager-rust\target\release\build\serde-837104cacb4971cf\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\mal\\Documents\\Windows APPS\\malachite-network-manager-rust\\target\\release\\build\\serde-837104cacb4971cf\\out
