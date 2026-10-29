@@ -1,0 +1,12 @@
+# Rust build output
+/target/
+
+# IDE / editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Windows junk
+Thumbs.db
+Desktop.ini
