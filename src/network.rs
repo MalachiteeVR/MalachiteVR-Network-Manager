@@ -51,7 +51,6 @@ pub fn toggle(name: &str, enable: bool) -> anyhow::Result<()> {
 
     #[cfg(windows)]
     {
-        use windows::Win32::Foundation::WIN32_ERROR;
         use windows::Win32::NetworkManagement::IpHelper::{GetIfEntry, SetIfEntry, MIB_IFROW};
 
         // The legacy IP Helper interface exposes GetIfEntry/SetIfEntry in the
