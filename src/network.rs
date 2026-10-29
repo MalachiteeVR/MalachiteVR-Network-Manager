@@ -39,46 +39,43 @@ pub fn adapters() -> anyhow::Result<Vec<Adapter>> {
     }).collect())
 }
 
-/// Enable/disable a network interface. netsh is used as a compatibility bridge
-/// for this one operation because Windows does not expose a supported simple
-/// Win32 call to toggle an adapter by friendly name. The process is hidden.
+/// Enable or disable an interface using the native IP Helper API.
 pub fn toggle(name: &str, enable: bool) -> anyhow::Result<()> {
     if name.trim().is_empty() {
         anyhow::bail!("Adapter name cannot be empty");
     }
-    let state = if enable { "enabled" } else { "disabled" };
-    let output = Command::new("netsh.exe")
-        .args(["interface", "set", "interface", &format!("name={name}"), &format!("admin={state}")])
-        .creation_flags_hidden()
-        .output()?;
-    if !output.status.success() {
-        let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        anyhow::bail!("Windows could not set adapter state: {}", if detail.is_empty() {
-            String::from_utf8_lossy(&output.stdout).trim().to_string()
-        } else { detail });
-    }
-    Ok(())
-}
 
-#[cfg(windows)]
-trait HiddenCommand {
-    fn creation_flags_hidden(&mut self) -> &mut Self;
-}
-#[cfg(windows)]
-impl HiddenCommand for Command {
-    fn creation_flags_hidden(&mut self) -> &mut Self {
-        use std::os::windows::process::CommandExt;
-        self.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-        self
+    let interfaces = netdev::get_interfaces()
+        .map_err(|error| anyhow::anyhow!("Unable to enumerate network adapters: {error}"))?;
+    let interface = interfaces.iter().find(|interface| {
+        interface.friendly_name.as_deref() == Some(name) || interface.name == name
+    }).ok_or_else(|| anyhow::anyhow!("Network adapter '{name}' was not found"))?;
+
+    #[cfg(windows)]
+    {
+        use windows::Win32::NetworkManagement::IpHelper::{GetIfEntry2, SetIfEntry2, MIB_IF_ROW2};
+        use windows::Win32::NetworkManagement::Ndis::{NET_IF_ADMIN_STATUS_DOWN, NET_IF_ADMIN_STATUS_UP};
+
+        let mut row = MIB_IF_ROW2::default();
+        row.InterfaceIndex = interface.index;
+        let get_status = unsafe { GetIfEntry2(&mut row) };
+        if get_status != 0 {
+            anyhow::bail!("Windows could not read adapter state (error {get_status})");
+        }
+
+        row.AdminStatus = if enable { NET_IF_ADMIN_STATUS_UP } else { NET_IF_ADMIN_STATUS_DOWN };
+        let set_status = unsafe { SetIfEntry2(&row) };
+        if set_status != 0 {
+            anyhow::bail!("Windows could not change adapter state (error {set_status}). Try running as administrator.");
+        }
+        return Ok(());
     }
-}
-#[cfg(not(windows))]
-trait HiddenCommand {
-    fn creation_flags_hidden(&mut self) -> &mut Self;
-}
-#[cfg(not(windows))]
-impl HiddenCommand for Command {
-    fn creation_flags_hidden(&mut self) -> &mut Self { self }
+
+    #[cfg(not(windows))]
+    {
+        let _ = (interface, enable);
+        anyhow::bail!("Adapter state changes are only supported on Windows")
+    }
 }
 
 #[cfg(windows)]
