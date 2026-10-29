@@ -20,4 +20,4 @@ jobs:
           target: x86_64-pc-windows-msvc
 
       - name: Build
-        run: cargo build --release --locked
+        run: cargo build --release
