@@ -27,8 +27,7 @@ fn format_speed(bits_per_second: Option<u64>) -> String {
 /// Enumerate adapters through the platform networking APIs. No shell or
 /// PowerShell process is started for discovery.
 pub fn adapters() -> anyhow::Result<Vec<Adapter>> {
-    let interfaces = netdev::get_interfaces()
-        .map_err(|error| anyhow::anyhow!("Unable to enumerate network adapters: {error}"))?;
+    let interfaces = netdev::get_interfaces();
 
     Ok(interfaces.into_iter().map(|interface| Adapter {
         name: interface.friendly_name.clone().unwrap_or_else(|| interface.name.clone()),
@@ -53,20 +52,26 @@ pub fn toggle(name: &str, enable: bool) -> anyhow::Result<()> {
 
     #[cfg(windows)]
     {
-        use windows::Win32::NetworkManagement::IpHelper::{GetIfEntry2, SetIfEntry2, MIB_IF_ROW2};
-        use windows::Win32::NetworkManagement::Ndis::{NET_IF_ADMIN_STATUS_DOWN, NET_IF_ADMIN_STATUS_UP};
+        use windows::Win32::Foundation::WIN32_ERROR;
+        use windows::Win32::NetworkManagement::IpHelper::{GetIfEntry, SetIfEntry, MIB_IFROW};
 
-        let mut row = MIB_IF_ROW2::default();
-        row.InterfaceIndex = interface.index;
-        let get_status = unsafe { GetIfEntry2(&mut row) };
-        if get_status != 0 {
-            anyhow::bail!("Windows could not read adapter state (error {get_status})");
+        // The legacy IP Helper interface exposes GetIfEntry/SetIfEntry in the
+        // windows crate and supports the adapter administrative state field.
+        let mut row = MIB_IFROW::default();
+        row.dwIndex = interface.index;
+        let get_status = unsafe { GetIfEntry(&mut row) };
+        if get_status != WIN32_ERROR(0) {
+            anyhow::bail!("Windows could not read adapter state (error {})", get_status.0);
         }
 
-        row.AdminStatus = if enable { NET_IF_ADMIN_STATUS_UP } else { NET_IF_ADMIN_STATUS_DOWN };
-        let set_status = unsafe { SetIfEntry2(&row) };
-        if set_status != 0 {
-            anyhow::bail!("Windows could not change adapter state (error {set_status}). Try running as administrator.");
+        // MIB_IF_ADMIN_STATUS_UP = 1, MIB_IF_ADMIN_STATUS_DOWN = 2.
+        row.dwAdminStatus = if enable { 1 } else { 2 };
+        let set_status = unsafe { SetIfEntry(&row) };
+        if set_status != WIN32_ERROR(0) {
+            anyhow::bail!(
+                "Windows could not change adapter state (error {}). Try running as administrator.",
+                set_status.0
+            );
         }
         return Ok(());
     }
