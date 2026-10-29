@@ -38,7 +38,7 @@ The executable is:
 target\release\malachite-network-manager.exe
 ```
 
-The first build after the WebView2 migration may update `Cargo.lock` because the GUI dependency set changed.
+The first build after this native API migration may update `Cargo.lock` to resolve the new Windows networking and firewall dependencies.
 
 ## Security notes
 
