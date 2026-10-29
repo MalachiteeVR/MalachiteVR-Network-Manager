@@ -31,7 +31,7 @@ fn value_string(value: &serde_json::Value) -> String {
 
 pub fn rules() -> anyhow::Result<Vec<Rule>> {
     let script = r#"Get-NetFirewallRule |
-        Select-Object -First 1000 DisplayName,Direction,Action,Enabled,Profile |
+        Select-Object -First 1000 |
         ForEach-Object {
             $p = Get-NetFirewallPortFilter -AssociatedNetFirewallRule $_ -ErrorAction SilentlyContinue |
                  Select-Object -First 1 Protocol,LocalPort
