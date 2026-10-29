@@ -1,8 +1,8 @@
 use crate::admin::ps;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Adapter {
     #[serde(rename = "Name")]
     pub name: String,
