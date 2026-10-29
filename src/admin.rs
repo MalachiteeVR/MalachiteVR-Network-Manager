@@ -29,53 +29,55 @@ pub fn is_admin() -> bool {
 }
 
 #[cfg(not(windows))]
-pub fn is_admin() -> bool {
-    false
-}
+pub fn is_admin() -> bool { false }
 
 pub fn ensure_elevated() {
-    if is_admin() {
-        return;
-    }
+    if is_admin() { return; }
 
     #[cfg(windows)]
-    {
+    unsafe {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::PCWSTR;
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
         let exe = match std::env::current_exe() {
             Ok(path) => path,
             Err(_) => std::process::exit(1),
         };
+        let exe_w: Vec<u16> = exe.as_os_str().encode_wide().chain(Some(0)).collect();
+        let verb_w: Vec<u16> = std::ffi::OsStr::new("runas")
+            .encode_wide().chain(Some(0)).collect();
 
-        // Re-launch through PowerShell with the standard UAC RunAs verb.
-        // Pass the current command-line arguments through to the elevated process.
-        let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
-        let mut command = Command::new("powershell.exe");
-        command.args(["-NoProfile", "-NonInteractive", "-Command"]);
-        command.arg("Start-Process -Verb RunAs -FilePath $args[0] -ArgumentList $args[1..]");
-        command.arg("--");
-        command.arg(&exe);
-        for arg in args {
-            command.arg(arg);
-        }
+        // UAC elevation is performed directly by Windows. No PowerShell window is
+        // created for the elevation step.
+        let result = ShellExecuteW(
+            None,
+            PCWSTR(verb_w.as_ptr()),
+            PCWSTR(exe_w.as_ptr()),
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        );
 
-        match command.status() {
-            Ok(status) if status.success() => std::process::exit(0),
-            _ => std::process::exit(1),
-        }
+        if result.0 as isize > 32 { std::process::exit(0); }
+        std::process::exit(1);
     }
 }
 
 pub fn ps(script: &str) -> anyhow::Result<String> {
-    let output = Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            script,
-        ])
-        .output()?;
+    let mut command = Command::new("powershell.exe");
+    command.args([
+        "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script,
+    ]);
 
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+
+    let output = command.output()?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         anyhow::bail!(
