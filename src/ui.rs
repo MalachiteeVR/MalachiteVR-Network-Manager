@@ -26,7 +26,7 @@ fn run_command(message: &str, proxy: &EventLoopProxy<UserEvent>) {
         None => { let _ = proxy.send_event(UserEvent::Result(json!({"error":"Missing action"}).to_string())); return; }
     };
     let proxy = proxy.clone();
-    thread::spawn(move || {
+    thread::spawn(move || -> () {
         let result: anyhow::Result<Value> = (|| {
             match action.as_str() {
                 "refresh" => { let adapters=network::adapters()?; let rules=firewall::rules()?; let ip=network::private_ipv4()?.map(|x|x.to_string()); Ok(json!({"kind":"refresh","adapters":adapters,"rules":rules,"ip":ip})) }
