@@ -47,8 +47,7 @@ pub fn ensure_elevated() {
         let verb_w: Vec<u16> = std::ffi::OsStr::new("runas")
             .encode_wide().chain(Some(0)).collect();
 
-        // UAC elevation is performed directly by Windows. No PowerShell window is
-        // created for the elevation step.
+        // UAC elevation is performed directly by Windows without a command shell.
         let result = ShellExecuteW(
             None,
             PCWSTR(verb_w.as_ptr()),
