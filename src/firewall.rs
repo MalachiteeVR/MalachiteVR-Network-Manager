@@ -23,9 +23,9 @@ pub fn rules() -> anyhow::Result<Vec<Rule>> {
         direction: format!("{:?}", rule.direction()),
         action: format!("{:?}", rule.action()),
         enabled: rule.enabled().to_string(),
-        profile: rule.profiles().map(|value| format!("{value:?}")).unwrap_or_else(|| "Any".to_string()),
-        protocol: rule.protocol().map(|value| format!("{value:?}")).unwrap_or_default(),
-        local_port: rule.local_ports().map(|ports| {
+        profile: rule.profiles().as_ref().map(|value| format!("{value:?}")).unwrap_or_else(|| "Any".to_string()),
+        protocol: rule.protocol().as_ref().map(|value| format!("{value:?}")).unwrap_or_default(),
+        local_port: rule.local_ports().as_ref().map(|ports| {
             let mut values: Vec<String> = ports.iter().map(|port| format!("{port:?}")).collect();
             values.sort();
             values.join(", ")
