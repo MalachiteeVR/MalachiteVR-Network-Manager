@@ -4,10 +4,8 @@ use std::process::Command;
 pub fn is_admin() -> bool {
     unsafe {
         use windows::Win32::Foundation::CloseHandle;
-        use windows::Win32::Security::{
-            GetTokenInformation, OpenProcessToken, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
-        };
-        use windows::Win32::System::Threading::GetCurrentProcess;
+        use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
+        use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
         let mut token = Default::default();
         if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).is_err() {
@@ -47,23 +45,20 @@ pub fn ensure_elevated() {
             Err(_) => std::process::exit(1),
         };
 
-        // Use PowerShell's documented RunAs verb here rather than binding directly
-        // to ShellExecuteW. This avoids Windows crate API-location differences while
-        // preserving the normal UAC consent prompt.
-        let status = Command::new("powershell.exe")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                "Start-Process",
-                "-FilePath",
-            ])
-            .arg(exe.as_os_str())
-            .args(["-Verb", "RunAs"])
-            .status();
+        // Re-launch through PowerShell with the standard UAC RunAs verb.
+        // Pass the current command-line arguments through to the elevated process.
+        let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+        let mut command = Command::new("powershell.exe");
+        command.args(["-NoProfile", "-NonInteractive", "-Command"]);
+        command.arg("Start-Process -Verb RunAs -FilePath $args[0] -ArgumentList $args[1..]");
+        command.arg("--");
+        command.arg(&exe);
+        for arg in args {
+            command.arg(arg);
+        }
 
-        match status {
-            Ok(s) if s.success() => std::process::exit(0),
+        match command.status() {
+            Ok(status) if status.success() => std::process::exit(0),
             _ => std::process::exit(1),
         }
     }
