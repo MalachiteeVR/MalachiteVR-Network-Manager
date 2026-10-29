@@ -1,12 +1,13 @@
 use anyhow::{Context, Result};
 use reqwest::blocking::Client;
+use serde::Serialize;
 use std::{
     collections::HashMap,
     net::{Ipv4Addr, SocketAddr, UdpSocket},
     time::Duration,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Device {
     pub location: String,
     pub server: String,
