@@ -4,8 +4,9 @@ Windows-first Rust desktop network manager with a Microsoft Edge WebView2 interf
 
 ## Features
 
-- UAC administrator elevation without spawning a PowerShell window
-- Hidden/background PowerShell helpers for Windows networking APIs
+- Native Windows UAC administrator elevation
+- Native Windows IP Helper APIs for adapter enumeration, state changes, TCP connections, and private IPv4 detection
+- Native Windows Firewall COM API for listing, adding, and removing firewall rules
 - Network adapter status, link speed, MAC address, and enable/disable
 - Current TCP connection viewer
 - Windows Defender Firewall rule listing, creation, and deletion
@@ -19,7 +20,7 @@ Windows-first Rust desktop network manager with a Microsoft Edge WebView2 interf
 
 The native shell is Rust. The interface is HTML/CSS/JavaScript rendered by WebView2 through the `wry` crate. JavaScript sends small JSON commands over Wry IPC, Rust performs the Windows/network operation on a worker thread, and the result is returned to the WebView.
 
-This keeps expensive discovery, firewall enumeration, and PowerShell calls off the UI thread.
+This keeps expensive discovery and firewall enumeration off the UI thread. Network and firewall features do not launch PowerShell.
 
 On Windows, Wry uses the Microsoft Edge WebView2 runtime as its rendering engine. A supported WebView2 Runtime installation is therefore required on the machine running the application.
 
@@ -42,6 +43,6 @@ The first build after the WebView2 migration may update `Cargo.lock` because the
 ## Security notes
 
 - The application requests UAC elevation because firewall and adapter changes require administrator privileges.
-- The UAC relaunch uses Windows' native `RunAs` shell verb. It does not use PowerShell for elevation.
-- PowerShell is still used as a compatibility layer for several Windows networking cmdlets, but helper processes use `CREATE_NO_WINDOW` and never display a console window.
+- The UAC relaunch uses Windows' native `RunAs` shell verb.
+- Adapter, TCP, IP, and firewall operations use native Windows APIs. The app does not spawn PowerShell or other command-line shells for these operations.
 - UPnP operations only target private RFC1918 client addresses.
