@@ -59,14 +59,14 @@ pub fn toggle(name: &str, enable: bool) -> anyhow::Result<()> {
         let mut row = MIB_IFROW::default();
         row.dwIndex = interface.index;
         let get_status = unsafe { GetIfEntry(&mut row) };
-        if get_status != WIN32_ERROR(0) {
+        if get_status.0 != 0 {
             anyhow::bail!("Windows could not read adapter state (error {})", get_status.0);
         }
 
         // MIB_IF_ADMIN_STATUS_UP = 1, MIB_IF_ADMIN_STATUS_DOWN = 2.
         row.dwAdminStatus = if enable { 1 } else { 2 };
         let set_status = unsafe { SetIfEntry(&row) };
-        if set_status != WIN32_ERROR(0) {
+        if set_status.0 != 0 {
             anyhow::bail!(
                 "Windows could not change adapter state (error {}). Try running as administrator.",
                 set_status.0
