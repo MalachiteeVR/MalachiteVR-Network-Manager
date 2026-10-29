@@ -44,8 +44,7 @@ pub fn toggle(name: &str, enable: bool) -> anyhow::Result<()> {
         anyhow::bail!("Adapter name cannot be empty");
     }
 
-    let interfaces = netdev::get_interfaces()
-        .map_err(|error| anyhow::anyhow!("Unable to enumerate network adapters: {error}"))?;
+    let interfaces = netdev::get_interfaces();
     let interface = interfaces.iter().find(|interface| {
         interface.friendly_name.as_deref() == Some(name) || interface.name == name
     }).ok_or_else(|| anyhow::anyhow!("Network adapter '{name}' was not found"))?;
@@ -163,8 +162,7 @@ pub fn connections() -> anyhow::Result<String> {
 
 /// Return a private IPv4 address, preferring the system's default interface.
 pub fn private_ipv4() -> anyhow::Result<Option<Ipv4Addr>> {
-    let interfaces = netdev::get_interfaces()
-        .map_err(|error| anyhow::anyhow!("Unable to enumerate network interfaces: {error}"))?;
+    let interfaces = netdev::get_interfaces();
 
     let candidates = interfaces.iter().filter(|interface| interface.default && interface.is_oper_up())
         .chain(interfaces.iter().filter(|interface| interface.is_oper_up()));
