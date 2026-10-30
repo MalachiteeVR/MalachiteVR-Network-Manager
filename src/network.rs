@@ -33,7 +33,7 @@ fn native_rows() -> anyhow::Result<Vec<windows::Win32::NetworkManagement::IpHelp
     use windows::Win32::NetworkManagement::IpHelper::{GetIfTable2, FreeMibTable, MIB_IF_TABLE2, MIB_IF_ROW2};
     let mut table: *mut MIB_IF_TABLE2 = std::ptr::null_mut();
     let status = unsafe { GetIfTable2(&mut table) };
-    if status != 0 || table.is_null() {
+    if status.0 != 0 || table.is_null() {
         anyhow::bail!("Windows could not enumerate network adapters (error {})", status.0);
     }
     let result = unsafe {
